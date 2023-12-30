@@ -3,9 +3,11 @@
 # ensure you have a file transactions.csv in the same folder as script.
 #it needs the following headers, time, address, amount (all lower caps)
 #rows can be empty
-#Cobble together by Flying Pig to help distribute Comet in an "orderly" fashion
-#---------USE AT YOUR OWN RISK-------------
+# you also need a blank csv file tx_sent.csv to start with 
+# CSVs might get autocreated, but best to have it already
 
+#Cobbled together by Flying Pig to help distribute Comet to our ADA friends :), but has more use cases
+#For example monitor tokens bought on spectrum and distribute a reward (e.g. buy tokenx from spectrum get tokeny as reward!)
 
 import requests
 import time as sleep
@@ -14,22 +16,21 @@ from ergpy import helper_functions, appkit
 import csv
 
 node_url = "http://213.239.193.208:9053"
-wallet_mnemonic = ""
-address_to_monitor= "" #which address do you want to monitor
-token_to_monitor = "" #token you want to monitor
-no_transactions_to_fetch = 50 #fetches last x transactions from address to monitor.
+wallet_mnemonic = "" 
+address_to_monitor= ""
+token_to_monitor = ""
+no_transactions_to_fetch = 100 #fetches last x transactions from address to monitor.
 check_interval = 120  #seconds between each check.
 
-#TESTING Set to true if you want to test script. this will send any tokens to testing address instead of true recipient
-#Use this to test your script. CSV FIle will still be populated with the actual recipients so if you want to send to these addresses once done testing, remove them first.
-testing = True 
+testing = True #set to true if you want to test script. this will send tokens to testing address instead of true recipient
 testing_address ='9fLYPigGHXkTyyQvU9zzoT3RTAXJ4dfHjbkg6ik2fHKKxjprSrh' #address to use for testing...
 
-csv_filename = 'transactions.csv' # will save any matching addresses to this file and check any new addresses to ensure no one gets sent tokens twice!
 token_to_dispense = ['0fdb7ff8b37479b6eb7aab38d45af2cfeefabbefdc7eebc0348d25dd65bc2c91'] #the token you want to send. This is $lambo
-token_amount = [1] #how many tokens will you send to each recipient
+token_amount = [1] #how many tokens will you send
 erg_amount = 0.0001 #how much erg will you send to each address (in addition to tokens)
 
+csv_filename = 'transactions.csv' # will save any matching addresses to this file and check any new addresses and txid to ensure no one gets sent tokens twice for the same tx!
+csv_tx_sent = 'tx_sent.csv' # csv to store submitted reward transactions
 #no need to change anything below
 submit = False
 headers = {
@@ -46,21 +47,22 @@ receiver_addresses = []
 tokens = [token_to_dispense]
 new_addresses = []
 
-def check_address(address, csv_filename):
+def check_address(address, tx_id, csv_filename):
     try:
         # Read data from CSV file
-        with open(csv_filename  , 'r') as file:
+        with open(csv_filename, 'r') as file:
             csv_reader = csv.DictReader(file)
-            csv_addresses = set(row['address'] for row in csv_reader)
+            csv_rows = list(csv_reader)
     except FileNotFoundError:
         print(f"Error: CSV file '{csv_filename}' not found.")
         return False
 
-    # Check if the specified address matches with addresses in the CSV
-    if address in csv_addresses:
-        return True
-    else:
-        return False
+    # Check if both address and tx_id exist in the same row
+    for row in csv_rows:
+        if row.get('address') == address and row.get('tx_id') == tx_id:
+            return True
+
+    return False
 
 def save_to_csv(address, csv_filename):
     # Check if the file exists
@@ -124,24 +126,28 @@ while True:
                 ):
                     address = output["address"]
                     amount = asset["amount"]
+                    tx_id = item["id"]
                     time = datetime.now()
-                    addresses_with_amounts.append({"time": time,"address": address, "amount": amount})
+                    addresses_with_amounts.append({"time": time,"address": address, "amount": amount,"tx_id":tx_id})
     # Print the result
 
     no_addresses = len(addresses_with_amounts)
-    print ("Found", no_addresses, "transactions. Checking if addresses have already been sent a reward....")
+    print ("Found", no_addresses, "addresses. Checking if txid has already been rewarded.....")
     if no_addresses > 0:
         for address in addresses_with_amounts:
-            exists = check_address(address['address'],csv_filename)
+
+            exists = check_address(address['address'],address['tx_id'], csv_filename)
+
+            if exists is True:
+                print(address['address'], "has already been rewarded for this transction (",address['tx_id'],")")
             sleep.sleep(1)
 
             if exists is False:
-                print("New TXs found",address['address'],"received", address["amount"])
+                print("New address found.",address['address'],"received", address["amount"],"in tx",address['tx_id'])
                 sleep.sleep(1)
                 new_addresses.append(address['address'])
                 save_to_csv(address, csv_filename) # saves the addresses
                 submit = True
-            print(new_addresses)
 
         if submit is True: #if new txs found will assemble and send tokens
 
@@ -165,12 +171,15 @@ while True:
                 sleep.sleep(30)
 
             print("Sending Transaction")
-            print(helper_functions.send_token(ergo=ergo, amount=erg_to_send, receiver_addresses=receiver_addresses, tokens=tokens, amount_tokens=tokens_to_send, wallet_mnemonic=wallet_mnemonic))
-            #print("New Addresses", receiver_addresses)
-            #print("Tokens to send:", tokens)
-            #print("Amount of tokens to send:", tokens_to_send)
-            #print("Erg to send:", erg_to_send)
-
+            txid= helper_functions.send_token(ergo=ergo, amount=erg_to_send, receiver_addresses=receiver_addresses, tokens=tokens, amount_tokens=tokens_to_send, wallet_mnemonic=wallet_mnemonic)
+            #txid="dummy"
+            print("TxID:", txid)
+            tx_submitted = {
+                "time": datetime.now(),
+                "address": receiver_addresses,
+                "txid": txid
+            }
+            save_to_csv(tx_submitted,csv_tx_sent)
             #resetting lists
             tokens_to_send = [token_amount]
             erg_to_send = [erg_amount]
