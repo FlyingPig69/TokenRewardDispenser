@@ -17,16 +17,16 @@ import csv
 
 node_url = "http://213.239.193.208:9053"
 wallet_mnemonic = "" 
-address_to_monitor= ""
-token_to_monitor = ""
+address_to_monitor= "" #address to monitor
+token_to_monitor = "" # token to monitor 
 no_transactions_to_fetch = 100 #fetches last x transactions from address to monitor.
 check_interval = 120  #seconds between each check.
 
-testing = True #set to true if you want to test script. this will send tokens to testing address instead of true recipient
+testing = True #set to true if you want to test script. this will send tokens to testing address instead of true recipient. CSV files will still be populated,so erase before you start "for real"
 testing_address ='9fLYPigGHXkTyyQvU9zzoT3RTAXJ4dfHjbkg6ik2fHKKxjprSrh' #address to use for testing...
 
 token_to_dispense = ['0fdb7ff8b37479b6eb7aab38d45af2cfeefabbefdc7eebc0348d25dd65bc2c91'] #the token you want to send. This is $lambo
-token_amount = [1] #how many tokens will you send
+token_amount = [1] #how many tokens will you send to each recipient
 erg_amount = 0.0001 #how much erg will you send to each address (in addition to tokens)
 
 csv_filename = 'transactions.csv' # will save any matching addresses to this file and check any new addresses and txid to ensure no one gets sent tokens twice for the same tx!
